@@ -402,7 +402,7 @@ app.get('/:variables/stream/:type/:id.json', async (req, res) => {
     }
   }
   console.log(`🎉 ${streams.length} stream(s) obtenus`);
-  return res.json({ streams });
+  return res.json({ streams: streams.slice(0, config.FILES_TO_SHOW) });
 });
 
 app.listen(PORT, () => {
