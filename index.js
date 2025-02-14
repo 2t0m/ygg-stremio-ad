@@ -2,6 +2,8 @@ const axios = require('axios');
 const FormData = require('form-data');
 const express = require('express');
 const path = require('path');
+const https = require('https'); // Ajout du module https
+const fs = require('fs'); // Ajout du module fs
 
 // ------------------------------
 // Fonctions utilitaires
@@ -249,7 +251,7 @@ async function uploadMagnets(magnets, config) {
 // ------------------------------
 
 const app = express();
-const PORT = process.env.PORT || 5005;
+const PORT = process.env.PORT || 5000;
 
 // Middleware CORS
 app.use((req, res, next) => {
@@ -405,6 +407,12 @@ app.get('/:variables/stream/:type/:id.json', async (req, res) => {
   return res.json({ streams: streams.slice(0, config.FILES_TO_SHOW) });
 });
 
-app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+// Lancer le serveur HTTPS
+const sslOptions = {
+  key: fs.readFileSync('/etc/ssl/private/server.key'),
+  cert: fs.readFileSync('/etc/ssl/certs/server.cert')
+};
+  
+https.createServer(sslOptions, app).listen(PORT, () => {
+    console.log(`✅ Serveur HTTPS lancé sur https://localhost:${PORT}`);
 });
