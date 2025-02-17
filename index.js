@@ -410,9 +410,9 @@ app.get('/:variables/stream/:type/:id.json', async (req, res) => {
 // Lancer le serveur HTTPS
 const sslOptions = {
   key: fs.readFileSync('/etc/ssl/private/server.key'),
-  cert: fs.readFileSync('/etc/ssl/certs/server.cert')
+  cert: fs.readFileSync('/etc/ssl/certs/server.pem') // ← Correction ici
 };
-  
+
 https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log(`✅ Serveur HTTPS lancé sur https://localhost:${PORT}`);
+    console.log(`✅ Serveur HTTPS lancé sur https://mon-ip-locale.local-ip.sh:${PORT}`);
 });
