@@ -38,12 +38,17 @@ async function getTmdbData(imdbId, config) {
     const response = await axios.get(`https://api.themoviedb.org/3/find/${imdbId}`, {
       params: { api_key: config.TMDB_API_KEY, external_source: "imdb_id" }
     });
-    if (response.data.movie_results && response.data.movie_results.length > 0) {
-      console.log(`✅ Film trouvé: ${response.data.movie_results[0].title}`);
-      return { type: "movie", title: response.data.movie_results[0].title };
-    } else if (response.data.tv_results && response.data.tv_results.length > 0) {
-      console.log(`✅ Série trouvée: ${response.data.tv_results[0].name}`);
-      return { type: "series", title: response.data.tv_results[0].name };
+
+    if (response.data.movie_results?.length > 0) {
+      const title = response.data.movie_results[0].title;
+      const frenchTitle = response.data.movie_results[0].original_title;
+      console.log(`✅ Film trouvé: ${title} (Titre FR: ${frenchTitle})`);
+      return { type: "movie", title, frenchTitle };
+    } else if (response.data.tv_results?.length > 0) {
+      const title = response.data.tv_results[0].name;
+      const frenchTitle = response.data.tv_results[0].original_name;
+      console.log(`✅ Série trouvée: ${title} (Titre FR: ${frenchTitle})`);
+      return { type: "series", title, frenchTitle };
     }
   } catch (error) {
     console.error("❌ Erreur TMDB:", error);
@@ -141,42 +146,67 @@ async function getTorrentHashFromYgg(torrentId) {
 }
 
 // Recherche de torrents sur YggTorrent
-async function searchYgg(title, type, season, episode, config) {
-  const requestUrl = `https://yggapi.eu/torrents?q=${encodeURIComponent(title)}&page=1&per_page=100&order_by=uploaded_at`;
-  console.log(`🔍 Recherche YggTorrent pour ${title} (${type})`);
-  try {
-    const response = await axios.get(requestUrl);
-    let torrents = response.data || [];
-    torrents.sort((a, b) => (b.seeders || 0) - (a.seeders || 0));
-    let selectedTorrents = [];
-    if (type === "series" && season && episode) {
-      const seasonFormatted = season.padStart(2, '0');
-      const episodeFormatted = episode.padStart(2, '0');
-      let completeSeasonTorrents = torrents.filter(torrent =>
-        config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
-        config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang)) &&
-        torrent.title.includes(`S${seasonFormatted}`) &&
-        !torrent.title.match(new RegExp(`S${seasonFormatted}E\\d{2}`, "i"))
-      );
-      if (completeSeasonTorrents.length > 0) {
-        console.log(`🔎 Torrent de saison complète trouvé pour S${seasonFormatted}`);
-        for (let torrent of completeSeasonTorrents.slice(0, config.FILES_TO_SHOW)) {
-          const hash = await getTorrentHashFromYgg(torrent.id);
-          if (hash) {
-            console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
-            selectedTorrents.push({ hash, completeSeason: true });
-          } else {
-            console.log(`❌ Pas de hash pour ${torrent.title}`);
+async function searchYgg(title, type, season, episode, config, titleFR = null) {
+  async function performSearch(searchTitle) {
+    console.log(`🔍 Recherche YggTorrent pour ${searchTitle} (${type})`);
+    const requestUrl = `https://yggapi.eu/torrents?q=${encodeURIComponent(searchTitle)}&page=1&per_page=100&order_by=uploaded_at`;
+    try {
+      const response = await axios.get(requestUrl);
+      let torrents = response.data || [];
+      torrents.sort((a, b) => (b.seeders || 0) - (a.seeders || 0));
+      let selectedTorrents = [];
+
+      if (type === "series" && season && episode) {
+        const seasonFormatted = season.padStart(2, '0');
+        const episodeFormatted = episode.padStart(2, '0');
+
+        // Recherche d'une saison complète
+        let completeSeasonTorrents = torrents.filter(torrent =>
+          config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
+          config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang)) &&
+          torrent.title.includes(`S${seasonFormatted}`) &&
+          !torrent.title.match(new RegExp(`S${seasonFormatted}E\\d{2}`, "i"))
+        );
+
+        if (completeSeasonTorrents.length > 0) {
+          console.log(`🔎 Torrent de saison complète trouvé pour S${seasonFormatted}`);
+          for (let torrent of completeSeasonTorrents.slice(0, config.FILES_TO_SHOW)) {
+            const hash = await getTorrentHashFromYgg(torrent.id);
+            if (hash) {
+              console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
+              selectedTorrents.push({ hash, completeSeason: true });
+            } else {
+              console.log(`❌ Pas de hash pour ${torrent.title}`);
+            }
+          }
+        } else {
+          // Recherche de l'épisode spécifique
+          let episodeTorrents = torrents.filter(torrent =>
+            config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
+            config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang)) &&
+            torrent.title.includes(`S${seasonFormatted}E${episodeFormatted}`)
+          );
+
+          console.log(`🔎 Filtrage pour l'épisode S${seasonFormatted}E${episodeFormatted}`);
+          for (let torrent of episodeTorrents.slice(0, config.FILES_TO_SHOW)) {
+            const hash = await getTorrentHashFromYgg(torrent.id);
+            if (hash) {
+              console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
+              selectedTorrents.push({ hash, completeSeason: false });
+            } else {
+              console.log(`❌ Pas de hash pour ${torrent.title}`);
+            }
           }
         }
       } else {
-        let episodeTorrents = torrents.filter(torrent =>
+        // Recherche pour un film
+        let filmTorrents = torrents.filter(torrent =>
           config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
-          config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang)) &&
-          torrent.title.includes(`S${seasonFormatted}E${episodeFormatted}`)
+          config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang))
         );
-        console.log(`🔎 Filtrage pour l'épisode S${seasonFormatted}E${episodeFormatted}`);
-        for (let torrent of episodeTorrents.slice(0, config.FILES_TO_SHOW)) {
+
+        console.log("🔎 Filtrage pour film (résolution et langue)");
+        for (let torrent of filmTorrents.slice(0, config.FILES_TO_SHOW)) {
           const hash = await getTorrentHashFromYgg(torrent.id);
           if (hash) {
             console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
@@ -186,33 +216,31 @@ async function searchYgg(title, type, season, episode, config) {
           }
         }
       }
-    } else {
-      let filmTorrents = torrents.filter(torrent =>
-        config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
-        config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang))
-      );
-      console.log("🔎 Filtrage pour film (résolution et langue)");
-      for (let torrent of filmTorrents.slice(0, config.FILES_TO_SHOW)) {
-        const hash = await getTorrentHashFromYgg(torrent.id);
-        if (hash) {
-          console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
-          selectedTorrents.push({ hash, completeSeason: false });
-        } else {
-          console.log(`❌ Pas de hash pour ${torrent.title}`);
-        }
-      }
-    }
-    if (selectedTorrents.length > 0) {
-      console.log(`🎬 ${selectedTorrents.length} torrent(s) sélectionné(s) pour ${title} (${type}).`);
+
       return selectedTorrents;
-    } else {
-      console.log(`❌ Aucun torrent filtré trouvé pour ${title} (${type}).`);
+    } catch (error) {
+      console.error("❌ Erreur recherche Ygg:", error);
       return [];
     }
-  } catch (error) {
-    console.error("❌ Erreur recherche Ygg:", error);
-    return [];
   }
+
+  // 🔍 Première recherche avec le titre original
+  let torrents = await performSearch(title);
+
+  // 📢 Si aucun résultat, on tente la recherche en FR
+  if (torrents.length === 0 && titleFR !== null) {
+    console.log(`📢 Aucun résultat trouvé avec "${title}", tentative avec "${titleFR}"`);
+    torrents = await performSearch(titleFR);
+  }
+
+  // 🛑 Résultat final
+  if (torrents.length > 0) {
+    console.log(`🎬 ${torrents.length} torrent(s) sélectionné(s) pour ${title} (${type}).`);
+  } else {
+    console.log(`❌ Aucun torrent filtré trouvé pour ${title} (${type}) même après la recherche FR.`);
+  }
+
+  return torrents;
 }
 
 // Upload des magnets via AllDebrid
@@ -347,10 +375,10 @@ app.get('/:variables/stream/:type/:id.json', async (req, res) => {
       return res.json({ streams: [] });
     }
     console.log(`📺 Recherche pour la série - S${season}E${episode}`);
-    magnets = await searchYgg(tmdbData.title, tmdbData.type, season, episode, config);
+    magnets = await searchYgg(tmdbData.title, tmdbData.type, season, episode, config, tmdbData.frenchTitle);
   } else if (tmdbData.type === "movie") {
     console.log("🎬 Recherche pour le film");
-    magnets = await searchYgg(tmdbData.title, tmdbData.type, null, null, config);
+    magnets = await searchYgg(tmdbData.title, tmdbData.type, null, null, config, tmdbData.frenchTitle);
   } else {
     console.error("❌ Type de contenu non supporté:", tmdbData.type);
     return res.json({ streams: [] });
@@ -412,7 +440,7 @@ const sslOptions = {
   key: fs.readFileSync('/etc/ssl/private/server.key'),
   cert: fs.readFileSync('/etc/ssl/certs/server.pem') // ← Correction ici
 };
-
+  
 https.createServer(sslOptions, app).listen(PORT, () => {
-    console.log(`✅ Serveur HTTPS lancé sur https://mon-ip-locale.local-ip.sh:${PORT}`);
+    console.log(`✅ Serveur HTTPS lancé sur https://0-0-0-0.local-ip.sh:${PORT}`);
 });
