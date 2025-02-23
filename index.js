@@ -18,7 +18,7 @@ function formatSize(bytes) {
 // Extrait résolution, codec et source depuis un nom de fichier
 function parseFileName(fileName) {
   const resolutionMatch = fileName.match(/(4k|\d{3,4}p)/i);
-  const codecMatch = fileName.match(/(h264|h265|x264|x265)/i);
+  const codecMatch = fileName.match(/(h264|h265|x264|x265|AV1)/i);
   const sourceMatch = fileName.match(/(BluRay|WEB[-]?DL|WEL[-]?DL|WEB(?!-DL)|HDRip|DVDRip|BRRip)/i);
   return {
     resolution: resolutionMatch ? resolutionMatch[0] : "inconnue",
@@ -146,6 +146,7 @@ async function getTorrentHashFromYgg(torrentId) {
 }
 
 // Recherche de torrents sur YggTorrent
+// Recherche de torrents sur YggTorrent
 async function searchYgg(title, type, season, episode, config, titleFR = null) {
   async function performSearch(searchTitle) {
     console.log(`🔍 Recherche YggTorrent pour ${searchTitle} (${type})`);
@@ -168,8 +169,16 @@ async function searchYgg(title, type, season, episode, config, titleFR = null) {
           !torrent.title.match(new RegExp(`S${seasonFormatted}E\\d{2}`, "i"))
         );
 
+        // Recherche de séries complètes avec le mot "COMPLETE"
+        let completeSeriesTorrents = torrents.filter(torrent =>
+          config.RES_TO_SHOW.some(res => torrent.title.includes(res)) &&
+          config.LANG_TO_SHOW.some(lang => torrent.title.includes(lang)) &&
+          torrent.title.toUpperCase().includes("COMPLETE")
+        );
+
+        // Si une saison complète est trouvée, on les ajoute
         if (completeSeasonTorrents.length > 0) {
-          console.log(`🔎 Torrent de saison complète trouvé pour S${seasonFormatted}`);
+          console.log(`🔎 Saison complète trouvée pour S${seasonFormatted}`);
           for (let torrent of completeSeasonTorrents.slice(0, config.FILES_TO_SHOW)) {
             const hash = await getTorrentHashFromYgg(torrent.id);
             if (hash) {
@@ -193,6 +202,20 @@ async function searchYgg(title, type, season, episode, config, titleFR = null) {
             if (hash) {
               console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
               selectedTorrents.push({ hash, completeSeason: false });
+            } else {
+              console.log(`❌ Pas de hash pour ${torrent.title}`);
+            }
+          }
+        }
+
+        // Si des séries complètes sont trouvées, on les ajoute aussi
+        if (completeSeriesTorrents.length > 0) {
+          console.log(`🔎 Séries complètes trouvées`);
+          for (let torrent of completeSeriesTorrents.slice(0, config.FILES_TO_SHOW)) {
+            const hash = await getTorrentHashFromYgg(torrent.id);
+            if (hash) {
+              console.log(`${torrent.title} | Seeders: ${torrent.seeders} | Hash: ${hash}`);
+              selectedTorrents.push({ hash, completeSeason: true });
             } else {
               console.log(`❌ Pas de hash pour ${torrent.title}`);
             }
