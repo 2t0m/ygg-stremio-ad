@@ -14,9 +14,7 @@
       --input-border: #ccc;
       --input-focus: var(--primary-color);
     }
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     body {
       font-family: 'Roboto', sans-serif;
       background-color: var(--background-color);
@@ -41,11 +39,7 @@
       margin-bottom: 20px;
       color: var(--primary-color);
     }
-    label {
-      font-weight: 500;
-      margin-top: 15px;
-      display: block;
-    }
+    label { font-weight: 500; margin-top: 15px; display: block; }
     input {
       width: 100%;
       padding: 10px;
@@ -71,9 +65,7 @@
       width: 100%;
       transition: background-color 0.3s ease;
     }
-    button:hover {
-      background-color: var(--secondary-color);
-    }
+    button:hover { background-color: var(--secondary-color); }
     .result {
       margin-top: 25px;
       background-color: #f1f3f5;
@@ -87,11 +79,27 @@
       text-decoration: none;
       font-weight: 500;
     }
-    .result a:hover {
-      text-decoration: underline;
-    }
+    .result a:hover { text-decoration: underline; }
   </style>
   <script>
+    function getConfigFromURL() {
+      const pathParts = window.location.pathname.split('/').filter(p => p);
+      if (pathParts.length >= 2 && pathParts[pathParts.length - 1] === "configure") {
+        try {
+          const encodedConfig = pathParts[pathParts.length - 2];
+          const decodedConfig = JSON.parse(atob(encodedConfig));
+
+          document.getElementById('tmdb').value = decodedConfig.TMDB_API_KEY || "";
+          document.getElementById('files').value = decodedConfig.FILES_TO_SHOW || 2;
+          document.getElementById('res').value = (decodedConfig.RES_TO_SHOW || []).join(",");
+          document.getElementById('lang').value = (decodedConfig.LANG_TO_SHOW || []).join(",");
+          document.getElementById('alldebrid').value = decodedConfig.API_KEY_ALLEDBRID || "";
+        } catch (error) {
+          console.error("Erreur lors du décodage de la configuration :", error);
+        }
+      }
+    }
+
     function generateConfig() {
       const config = {
         TMDB_API_KEY: document.getElementById('tmdb').value,
@@ -101,16 +109,21 @@
         API_KEY_ALLEDBRID: document.getElementById('alldebrid').value
       };
       const encodedConfig = btoa(JSON.stringify(config));
-      
-      // Détermination dynamique de l'URL de base
+
       const protocol = window.location.protocol;
       const host = window.location.hostname;
       const port = window.location.port ? ':' + window.location.port : '';
       const baseUrl = `${protocol}//${host}${port}`;
-      
+
       document.getElementById('result').innerHTML = `
         <p><strong>Configuration encodée (base64):</strong></p>
         <p>${encodedConfig}</p>
+        <p><strong>Lien pour afficher la configuration:</strong></p>
+        <p>
+          <a href="${baseUrl}/${encodedConfig}/configure" target="_blank">
+            ${baseUrl}/${encodedConfig}/config
+          </a>
+        </p>
         <p><strong>Lien pour le manifest:</strong></p>
         <p>
           <a href="${baseUrl}/${encodedConfig}/manifest.json" target="_blank">
@@ -125,6 +138,8 @@
         </p>
       `;
     }
+
+    window.onload = getConfigFromURL;
   </script>
 </head>
 <body>
@@ -132,19 +147,19 @@
     <h1>Configuration Addon</h1>
     <label for="tmdb">TMDB API Key</label>
     <input type="text" id="tmdb" placeholder="Entrez votre TMDB API Key">
-    
+
     <label for="files">Files to Show</label>
     <input type="number" id="files" value="2">
-    
+
     <label for="res">Resolutions (séparées par une virgule)</label>
     <input type="text" id="res" value="1080p">
-    
+
     <label for="lang">Languages (séparés par une virgule)</label>
     <input type="text" id="lang" value="MULTi,VOSTFR,FRENCH">
-    
+
     <label for="alldebrid">AllDebrid API Key</label>
     <input type="text" id="alldebrid" placeholder="Entrez votre AllDebrid API Key">
-    
+
     <button onclick="generateConfig()">Générer la configuration</button>
     <div id="result" class="result"></div>
   </div>
