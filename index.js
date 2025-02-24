@@ -336,6 +336,31 @@ function getConfig(req) {
   }
 }
 
+// Route pour récupérer la configuration
+app.get('/:variables/configure', (req, res) => {
+    let config;
+    try {
+        config = getConfig(req);
+    } catch (e) {
+        return res.status(400).send("Configuration invalide !");
+    }
+
+    fs.readFile(path.join(__dirname, 'public', 'config.html'), 'utf8', (err, data) => {
+        if (err) {
+            return res.status(500).send("Erreur lors du chargement de la page.");
+        }
+
+        // Remplace les placeholders par les valeurs de config
+        let page = data
+            .replace(/{{TMDB_API_KEY}}/g, config.TMDB_API_KEY || '')
+            .replace(/{{API_KEY_ALLEDBRID}}/g, config.API_KEY_ALLEDBRID || '')
+            .replace(/{{FILES_TO_SHOW}}/g, config.FILES_TO_SHOW || 5)
+            .replace(/{{RES_TO_SHOW}}/g, config.RES_TO_SHOW ? config.RES_TO_SHOW.join(', ') : '')
+            .replace(/{{LANG_TO_SHOW}}/g, config.LANG_TO_SHOW ? config.LANG_TO_SHOW.join(', ') : '');
+
+        res.send(page);
+    });
+});
 // Route pour servir la page de configuration
 app.get('/config', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'config.html'));
@@ -347,25 +372,47 @@ app.get('/config', (req, res) => {
     - /:variables/manifest.json (la configuration encodée doit être présente)
 */
 app.get('/:variables/manifest.json', (req, res) => {
-  let config;
-  try {
-    config = getConfig(req);
-  } catch (e) {
-    return res.status(400).json({ error: e.message });
-  }
-  // Manifest statique (peut être adapté dynamiquement si besoin)
-  const manifest = {
-    id: 'ygg.stremio.ad',
-    version: '0.0.1',
-    name: 'Ygg + AD',
-    description: 'Un addon pour accéder aux torrents YggTorrent en cache sur AllDebrid (grâce à Ygg API).',
-    types: ['movie', 'series'],
-    resources: ['stream'],
-    catalogs: []
-  };
-  res.json(manifest);
+    let config;
+    try {
+        config = getConfig(req);
+    } catch (e) {
+        return res.status(400).json({ error: e.message });
+    }
+
+    const manifest = {
+        id: 'ygg.stremio.ad',
+        version: '0.0.1',
+        name: 'Ygg + AD',
+        description: 'Un addon pour accéder aux torrents YggTorrent en cache sur AllDebrid (grâce à Ygg API).',
+        types: ['movie', 'series'],
+        resources: ['stream'],
+        catalogs: [],
+        behaviorHints: {
+            configurable: true
+        }
+    };
+
+    res.json(manifest);
 });
 
+// Lien de configuration pour Stremio
+app.get('/addon.json', (req, res) => {
+    const baseUrl = req.protocol + '://' + req.get('host');
+    const encodedConfig = Buffer.from(JSON.stringify({
+        TMDB_API_KEY: "VOTRE_TMDB_API_KEY",
+        API_KEY_ALLEDBRID: "VOTRE_API_KEY_ALLEDBRID",
+        RES_TO_SHOW: ["720p", "1080p", "4k"],
+        LANG_TO_SHOW: ["FRENCH", "VOSTFR"],
+        FILES_TO_SHOW: 5
+    })).toString('base64');
+
+    const addonUrl = `${baseUrl}/${encodedConfig}/manifest.json`;
+
+    res.json({
+        addon: addonUrl,
+        message: "Ajoutez ce lien dans Stremio pour configurer l'addon."
+    });
+});
 /*
   Endpoint du stream
   Chemins possibles :
@@ -463,7 +510,7 @@ const sslOptions = {
   key: fs.readFileSync('/etc/ssl/private/server.key'),
   cert: fs.readFileSync('/etc/ssl/certs/server.pem') // ← Correction ici
 };
-  
+
 https.createServer(sslOptions, app).listen(PORT, () => {
     console.log(`✅ Serveur HTTPS lancé sur https://0-0-0-0.local-ip.sh:${PORT}`);
 });
