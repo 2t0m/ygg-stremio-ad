@@ -32,7 +32,7 @@ else
 fi
 
 # Afficher les fichiers pour debug
-ls -l /etc/ssl/certs /etc/ssl/private
+#ls -l /etc/ssl/certs /etc/ssl/private
 
 # Démarrer l'application avec les arguments fournis
 exec "$@"
