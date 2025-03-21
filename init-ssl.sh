@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/bin/bash
 
 # Chemins vers les fichiers SSL
 KEY_PATH="/etc/ssl/private/server.key"
