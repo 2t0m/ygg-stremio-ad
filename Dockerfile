@@ -1,30 +1,30 @@
-# Utiliser une image officielle Node.js
+# Use an official Node.js image
 FROM node:18
 
-# Installer OpenSSL pour gérer les certificats SSL
+# Install OpenSSL to handle SSL certificates
 RUN apt-get update && apt-get install -y openssl
 
-# Définir le répertoire de travail dans le conteneur
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copier les fichiers package.json et package-lock.json (si présent)
+# Copy package.json and package-lock.json (if present)
 COPY package*.json ./
 
-# Installer les dépendances
+# Install dependencies
 RUN npm install
 
-# Copier l'ensemble du code dans le conteneur
+# Copy the entire application code into the container
 COPY . .
 
-# Créer un répertoire pour stocker les certificats
+# Create directories for storing SSL certificates
 RUN mkdir -p /etc/ssl/private /etc/ssl/certs
 
-# Copier le script de génération SSL
+# Copy the SSL generation script
 COPY init-ssl.sh /init-ssl.sh
 RUN chmod +x /init-ssl.sh
 
-# Exposer le port utilisé par l'application (ici 5000)
+# Expose the application's port (5000 in this case)
 EXPOSE 5000
 
-# Démarrer le script d'initialisation puis l'application
+# Run the SSL initialization script, then start the application
 CMD ["/bin/bash", "/init-ssl.sh", "node", "index.js"]
