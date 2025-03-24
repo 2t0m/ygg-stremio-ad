@@ -3,6 +3,8 @@ services:
   ygg-stremio-ad:
     image: 2t0m/ygg-stremio-ad:latest
     container_name: ygg-stremio-ad
+    volumes:
+      - CHANGE_TO_COMPOSE_DATA_PATH/ygg-stremio-ad/data:/data
     ports:
       - "5000:5000"
     restart: unless-stopped
