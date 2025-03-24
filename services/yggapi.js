@@ -123,6 +123,22 @@ async function searchYgg(title, type, season, episode, config, titleFR = null) {
     console.log(`🎬 ${episodeTorrents.length} episode torrents found.`);
   }
 
+  // Search for movies
+  if (type === "movie") {
+    console.log("🔍 Searching for movie");
+
+    const movieTorrents = [];
+    movieTorrents.push(
+      ...torrents.filter(torrent =>
+        config.LANG_TO_SHOW.some(lang => torrent.title.toLowerCase().includes(lang.toLowerCase())) &&
+        config.RES_TO_SHOW.some(res => torrent.title.toLowerCase().includes(res.toLowerCase())) &&
+        config.CODECS_TO_SHOW.some(codec => torrent.title.toLowerCase().includes(codec.toLowerCase()))
+      )
+    );
+    console.log(`🎬 ${movieTorrents.length} movie torrents found.`);
+    return { movieTorrents };
+  }
+
   return { completeSeriesTorrents, completeSeasonTorrents, episodeTorrents };
 }
 
