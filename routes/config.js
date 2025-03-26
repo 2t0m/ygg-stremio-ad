@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { getConfig } = require('../utils/helpers');
+const logger = require('../utils/logger'); // Import du logger
 
 const router = express.Router();
 
@@ -11,7 +12,7 @@ router.get('/config', (req, res) => {
 
   res.sendFile(configPath, (err) => {
     if (err) {
-      console.error("❌ Error serving the configuration page:", err.message);
+      logger.error("❌ Error serving the configuration page:", err.message);
       res.status(500).send("Error loading configuration page.");
     }
   });
@@ -25,6 +26,7 @@ router.get('/:variables/configure', (req, res) => {
   try {
     config = getConfig(req);
   } catch (e) {
+    logger.error("❌ Invalid configuration in request:", e.message);
     return res.status(400).send("Invalid configuration!");
   }
 
@@ -33,7 +35,7 @@ router.get('/:variables/configure', (req, res) => {
   // Read and process the HTML file
   fs.readFile(configPath, 'utf8', (err, data) => {
     if (err) {
-      console.error("❌ Error reading the configuration page:", err.message);
+      logger.error("❌ Error reading the configuration page:", err.message);
       return res.status(500).send("Error loading configuration page.");
     }
 

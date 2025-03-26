@@ -4,6 +4,7 @@ const fs = require('fs');
 const manifestRoutes = require('./routes/manifest');
 const streamRoutes = require('./routes/stream');
 const configRoutes = require('./routes/config');
+const logger = require('./utils/logger');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,5 +27,5 @@ const sslOptions = {
 };
 
 https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log(`✅ HTTPS server running on https://0-0-0-0.local-ip.sh:${PORT}`);
+  logger.info(`✅ HTTPS server running on https://0-0-0-0.local-ip.sh:${PORT}`);
 });

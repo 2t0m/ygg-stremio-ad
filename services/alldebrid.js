@@ -1,16 +1,18 @@
 const axios = require('axios');
 const FormData = require('form-data');
+const logger = require('../utils/logger'); // Import the logger
 
 // Upload magnets to AllDebrid
 async function uploadMagnets(magnets, config) {
   const url = `https://api.alldebrid.com/v4/magnet/upload?apikey=${config.API_KEY_ALLEDBRID}`;
+  
+  // Extract hashes from the magnets parameter
+  const hashes = magnets.map(m => m.hash);
   const formData = new FormData();
-
-  // Add magnet hashes to the form data
-  magnets.forEach(m => formData.append("magnets[]", m.hash));
+  hashes.forEach(hash => formData.append("magnets[]", hash));
 
   try {
-    console.log("🔄 Uploading magnets...");
+    logger.info("🔄 Uploading magnets...");
     const response = await axios.post(url, formData, {
       headers: {
         "Authorization": `Bearer ${config.API_KEY_ALLEDBRID}`,
@@ -19,6 +21,7 @@ async function uploadMagnets(magnets, config) {
     });
 
     if (response.data.status === "success") {
+      logger.info(`✅ Successfully uploaded ${response.data.data.magnets.length} magnets.`);
       return response.data.data.magnets.map(magnet => ({
         hash: magnet.hash,
         ready: magnet.ready ? '✅ Ready' : '❌ Not ready',
@@ -27,11 +30,11 @@ async function uploadMagnets(magnets, config) {
         id: magnet.id
       }));
     } else {
-      console.error("❌ Error uploading magnets:", response.data.data);
+      logger.warn("❌ Error uploading magnets:", response.data.data);
       return [];
     }
   } catch (error) {
-    console.error("❌ Upload error:", error.response?.data || error.message);
+    logger.error("❌ Upload error:", error.response?.data || error.message);
     return [];
   }
 }
@@ -43,7 +46,7 @@ async function getFilesFromMagnetId(magnetId, config) {
   formData.append("id[]", magnetId);
 
   try {
-    console.log(`🔄 Retrieving files for magnet ID: ${magnetId}`);
+    logger.info(`🔄 Retrieving files for magnet ID: ${magnetId}`);
     const response = await axios.post(url, formData, {
       headers: {
         "Authorization": `Bearer ${config.API_KEY_ALLEDBRID}`,
@@ -52,50 +55,44 @@ async function getFilesFromMagnetId(magnetId, config) {
     });
 
     if (response.data.status === "success") {
-      let files = response.data.data.magnets[0].files;
-      let videoFiles = [];
-
-      // Flatten nested files in the "e" property
-      files.forEach(file => {
-        if (file.e && Array.isArray(file.e)) {
-          // Ajoutez les fichiers imbriqués
-          file.e.forEach(subFile => {
-            videoFiles.push(subFile);
-          });
-        } else {
-          videoFiles.push(file);
-        }
-      });
-
+      const files = response.data.data.magnets[0].files;
       const videoExtensions = [".mp4", ".mkv", ".avi", ".mov", ".wmv"];
 
-      // Filter files to include only videos
-      let filteredVideos = videoFiles.filter(file => {
-        const fileName = file.n.toLowerCase();
-        return videoExtensions.some(ext => fileName.endsWith(ext));
-      });
+      // Recursive function to extract only video files
+      const extractVideos = (fileList) => {
+        const videos = [];
+        fileList.forEach(file => {
+          if (file.e && Array.isArray(file.e)) {
+            // If the file contains sub-files, process them recursively
+            videos.push(...extractVideos(file.e));
+          } else if (file.n && file.l) {
+            // Check if the file is a video
+            const fileName = file.n.toLowerCase();
+            if (videoExtensions.some(ext => fileName.endsWith(ext))) {
+              videos.push({
+                name: file.n,
+                size: file.s || 0,
+                link: file.l
+              });
+            }
+          }
+        });
+        return videos;
+      };
 
-      // Fallback to all files if no videos are found
-      if (filteredVideos.length === 0 && videoFiles.length > 0) {
-        filteredVideos = videoFiles;
-      }
+      // Extract video files
+      const filteredVideos = extractVideos(files);
 
-      console.log(`🎥 ${filteredVideos.length} video(s) found`);
+      logger.info(`🎥 ${filteredVideos.length} video(s) found for magnet ID: ${magnetId}`);
+      logger.debug(`🎥 Filtered videos for magnet ID ${magnetId}: ${JSON.stringify(filteredVideos, null, 2)}`);
 
-      // Map and return the filtered video files
-      return filteredVideos
-        .filter(file => file.n && file.l)
-        .map(file => ({
-          name: file.n,
-          size: file.s || 0,
-          link: file.l
-        }));
+      return filteredVideos;
     } else {
-      console.error("❌ Error retrieving files:", response.data.data);
+      logger.warn("❌ Error retrieving files:", response.data.data);
       return [];
     }
   } catch (error) {
-    console.error("❌ File retrieval error:", error);
+    logger.error("❌ File retrieval error:", error);
     return [];
   }
 }
@@ -107,7 +104,7 @@ async function unlockFileLink(fileLink, config) {
   formData.append("link", fileLink);
 
   try {
-    console.log(`🔄 Unlocking link: ${fileLink}`);
+    logger.info(`🔄 Unlocking link: ${fileLink}`);
     const response = await axios.post(url, formData, {
       headers: {
         "Authorization": `Bearer ${config.API_KEY_ALLEDBRID}`,
@@ -118,11 +115,11 @@ async function unlockFileLink(fileLink, config) {
     if (response.data.status === "success") {
       return response.data.data.link;
     } else {
-      console.error("❌ Error unlocking link:", response.data.data);
+      logger.warn("❌ Error unlocking link:", response.data.data);
       return null;
     }
   } catch (error) {
-    console.error("❌ Unlock error:", error);
+    logger.error("❌ Unlock error:", error);
     return null;
   }
 }

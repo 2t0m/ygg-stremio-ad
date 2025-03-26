@@ -16,7 +16,7 @@ router.get('/:variables/manifest.json', (req, res) => {
   // Define the manifest object
   const manifest = {
     id: 'ygg.stremio.ad',
-    version: '0.0.3',
+    version: '0.0.4',
     name: 'Ygg + AD',
     description: 'An addon to access YggTorrent torrents cached on AllDebrid (thanks to Ygg API).',
     types: ['movie', 'series'],

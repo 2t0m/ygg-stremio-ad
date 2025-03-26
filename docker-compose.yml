@@ -3,6 +3,8 @@ services:
   ygg-stremio-ad:
     image: 2t0m/ygg-stremio-ad:latest
     container_name: ygg-stremio-ad
+    environment:
+      - NODE_ENV=production
     volumes:
       - CHANGE_TO_COMPOSE_DATA_PATH/ygg-stremio-ad/data:/data
     ports:
