@@ -22,12 +22,14 @@ async function uploadMagnets(magnets, config) {
 
     if (response.data.status === "success") {
       logger.info(`✅ Successfully uploaded ${response.data.data.magnets.length} magnets.`);
+      logger.debug(JSON.stringify(response.data, null, 2));
       return response.data.data.magnets.map(magnet => ({
         hash: magnet.hash,
         ready: magnet.ready ? '✅ Ready' : '❌ Not ready',
         name: magnet.name,
         size: magnet.size,
-        id: magnet.id
+        id: magnet.id,
+        source: magnets.find(m => m.hash === magnet.hash)?.source || "Unknown" // Ajout de la source
       }));
     } else {
       logger.warn("❌ Error uploading magnets:", response.data.data);
@@ -40,7 +42,7 @@ async function uploadMagnets(magnets, config) {
 }
 
 // Retrieve video files for a magnet
-async function getFilesFromMagnetId(magnetId, config) {
+async function getFilesFromMagnetId(magnetId, source, config) {
   const url = `https://api.alldebrid.com/v4/magnet/files?apikey=${config.API_KEY_ALLEDBRID}`;
   const formData = new FormData();
   formData.append("id[]", magnetId);
@@ -72,7 +74,8 @@ async function getFilesFromMagnetId(magnetId, config) {
               videos.push({
                 name: file.n,
                 size: file.s || 0,
-                link: file.l
+                link: file.l,
+                source // Ajout de la source
               });
             }
           }

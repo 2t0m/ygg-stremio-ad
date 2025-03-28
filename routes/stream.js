@@ -1,6 +1,7 @@
 const express = require('express');
 const { getTmdbData } = require('../services/tmdb');
 const { searchYgg, getTorrentHashFromYgg } = require('../services/yggapi');
+const { searchSharewood } = require('../services/sharewoodapi');
 const { uploadMagnets, getFilesFromMagnetId, unlockFileLink } = require('../services/alldebrid');
 const { parseFileName, formatSize, getConfig } = require('../utils/helpers');
 const logger = require('../utils/logger');
@@ -38,22 +39,53 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
     return res.json({ streams: [] });
   }
 
-  // Call searchYgg to retrieve processed torrents
-  const searchResults = await searchYgg(
-    tmdbData.title,
-    tmdbData.type,
-    season,
-    episode,
-    config,
-    tmdbData.frenchTitle
-  );
+  // Call searchYgg and searchSharewood to retrieve processed torrents
+  const [yggResults, sharewoodResults] = await Promise.all([
+    searchYgg(
+      tmdbData.title,
+      tmdbData.type,
+      season,
+      episode,
+      config,
+      tmdbData.frenchTitle
+    ),
+    searchSharewood(
+      tmdbData.title,
+      tmdbData.type,
+      season,
+      episode,
+      config
+    )
+  ]);
+
+  // Combine results from both sources
+  const combinedResults = {
+    completeSeriesTorrents: [
+      ...yggResults.completeSeriesTorrents,
+      ...sharewoodResults.completeSeriesTorrents
+    ],
+    completeSeasonTorrents: [
+      ...yggResults.completeSeasonTorrents,
+      ...sharewoodResults.completeSeasonTorrents
+    ],
+    episodeTorrents: [
+      ...yggResults.episodeTorrents,
+      ...sharewoodResults.episodeTorrents
+    ],
+    movieTorrents: [
+      ...yggResults.movieTorrents,
+      ...sharewoodResults.movieTorrents
+    ]
+  };
+
+  logger.debug(`🔗 Combined Results: ${JSON.stringify(combinedResults, null, 2)}`);
 
   // Check if any results were found
-  if (!searchResults || (
-    searchResults.completeSeriesTorrents.length === 0 &&
-    searchResults.completeSeasonTorrents.length === 0 &&
-    searchResults.episodeTorrents.length === 0 &&
-    searchResults.movieTorrents.length === 0
+  if (!combinedResults || (
+    combinedResults.completeSeriesTorrents.length === 0 &&
+    combinedResults.completeSeasonTorrents.length === 0 &&
+    combinedResults.episodeTorrents.length === 0 &&
+    combinedResults.movieTorrents.length === 0
   )) {
     logger.warn("❌ No torrents found for the requested content.");
     return res.json({ streams: [] });
@@ -62,11 +94,11 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
   // Combine torrents based on type (series or movie)
   let allTorrents = [];
   if (type === "series") {
-    const { completeSeriesTorrents, completeSeasonTorrents, episodeTorrents } = searchResults;
+    const { completeSeriesTorrents, completeSeasonTorrents, episodeTorrents } = combinedResults;
 
-    logger.debug(`📝 Torrents categorized as complete series: ${completeSeriesTorrents.map(t => t.title).join(', ')}`);
-    logger.debug(`📝 Torrents categorized as complete seasons: ${completeSeasonTorrents.map(t => t.title).join(', ')}`);
-    logger.debug(`📝 Torrents categorized as specific episodes: ${episodeTorrents.map(t => t.title).join(', ')}`);
+    logger.debug(`📝 Torrents categorized as complete series: ${completeSeriesTorrents.map(t => `${t.title} (hash: ${t.hash})`).join(', ')}`);
+    logger.debug(`📝 Torrents categorized as complete seasons: ${completeSeasonTorrents.map(t => `${t.title} (hash: ${t.hash})`).join(', ')}`);
+    logger.debug(`📝 Torrents categorized as specific episodes: ${episodeTorrents.map(t => `${t.title} (hash: ${t.hash})`).join(', ')}`);
 
     // Filter episode torrents to ensure they match the requested season and episode
     const filteredEpisodeTorrents = episodeTorrents.filter(torrent => {
@@ -80,7 +112,7 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
 
     allTorrents = [...completeSeriesTorrents, ...completeSeasonTorrents, ...filteredEpisodeTorrents];
   } else if (type === "movie") {
-    const { movieTorrents } = searchResults;
+    const { movieTorrents } = combinedResults;
     logger.debug(`📝 Torrents categorized as movies: ${movieTorrents.map(t => t.title).join(', ')}`);
     allTorrents = [...movieTorrents];
   }
@@ -92,12 +124,16 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
   // Retrieve hashes for the torrents
   const magnets = [];
   for (const torrent of limitedTorrents) {
-    const hash = await getTorrentHashFromYgg(torrent.id);
-    if (hash) {
-      torrent.hash = hash;
-      magnets.push({ hash, title: torrent.title });
+    if (torrent.hash) {
+      magnets.push({ hash: torrent.hash, title: torrent.title, source: torrent.source || "Unknown" });
     } else {
-      logger.warn(`❌ Skipping torrent: ${torrent.title} (no hash found)`);
+      const hash = await getTorrentHashFromYgg(torrent.id);
+      if (hash) {
+        torrent.hash = hash;
+        magnets.push({ hash, title: torrent.title, source: torrent.source || "Unknown" });
+      } else {
+        logger.warn(`❌ Skipping torrent: ${torrent.title} (no hash found)`);
+      }
     }
   }
 
@@ -130,7 +166,7 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
         break;
       }
 
-      const videoFiles = await getFilesFromMagnetId(torrent.id, config);
+      const videoFiles = await getFilesFromMagnetId(torrent.id, torrent.source, config);
 
       // Filter relevant video files
       const filteredFiles = videoFiles.filter(file => {
@@ -161,7 +197,7 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
         if (unlockedLink) {
           const { resolution, codec, source } = parseFileName(file.name);
           streams.push({
-            name: `❤️ YGG + AD | 🖥️ ${resolution} | 🎞️ ${codec}`,
+            name: `❤️ ${torrent.source} + AD | 🖥️ ${resolution} | 🎞️ ${codec}`,
             title: `${tmdbData.title}${season && episode ? ` - S${season.padStart(2, '0')}E${episode.padStart(2, '0')}` : ''}\n${file.name}\n🎬 ${source} | 💾 ${formatSize(file.size)}`,
             url: unlockedLink
           });

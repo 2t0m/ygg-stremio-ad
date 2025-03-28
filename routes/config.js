@@ -45,7 +45,8 @@ router.get('/:variables/configure', (req, res) => {
       .replace(/{{API_KEY_ALLEDBRID}}/g, config.API_KEY_ALLEDBRID || '')
       .replace(/{{FILES_TO_SHOW}}/g, config.FILES_TO_SHOW || 5)
       .replace(/{{RES_TO_SHOW}}/g, config.RES_TO_SHOW ? config.RES_TO_SHOW.join(', ') : '')
-      .replace(/{{LANG_TO_SHOW}}/g, config.LANG_TO_SHOW ? config.LANG_TO_SHOW.join(', ') : '');
+      .replace(/{{LANG_TO_SHOW}}/g, config.LANG_TO_SHOW ? config.LANG_TO_SHOW.join(', ') : '')
+      .replace(/{{SHAREWOOD_PASSKEY}}/g, config.SHAREWOOD_PASSKEY || '');
 
     res.send(page);
   });

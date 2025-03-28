@@ -95,8 +95,9 @@
           document.getElementById('lang').value = (decodedConfig.LANG_TO_SHOW || []).join(",");
           document.getElementById('codecs').value = (decodedConfig.CODECS_TO_SHOW || []).join(",");
           document.getElementById('alldebrid').value = decodedConfig.API_KEY_ALLEDBRID || "";
+          document.getElementById('sharewood').value = decodedConfig.SHAREWOOD_PASSKEY || "";
         } catch (error) {
-          console.error("Erreur lors du décodage de la configuration :", error);
+          console.error("Error decoding configuration:", error);
         }
       }
     }
@@ -108,7 +109,8 @@
         RES_TO_SHOW: document.getElementById('res').value.split(',').map(s => s.trim()),
         LANG_TO_SHOW: document.getElementById('lang').value.split(',').map(s => s.trim()),
         CODECS_TO_SHOW: document.getElementById('codecs').value.split(',').map(s => s.trim()),
-        API_KEY_ALLEDBRID: document.getElementById('alldebrid').value
+        API_KEY_ALLEDBRID: document.getElementById('alldebrid').value,
+        SHAREWOOD_PASSKEY: document.getElementById('sharewood').value
       };
       const encodedConfig = btoa(JSON.stringify(config));
       
@@ -118,21 +120,21 @@
       const baseUrl = `${protocol}//${host}${port}`;
       
       document.getElementById('result').innerHTML = `
-        <p><strong>Configuration encodée (base64):</strong></p>
+        <p><strong>Encoded Configuration (base64):</strong></p>
         <p>${encodedConfig}</p>
-        <p><strong>Lien pour afficher la configuration:</strong></p>
+        <p><strong>Configuration Page Link:</strong></p>
         <p>
           <a href="${baseUrl}/${encodedConfig}/configure" target="_blank">
             ${baseUrl}/${encodedConfig}/configure
           </a>
         </p>
-        <p><strong>Lien pour le manifest:</strong></p>
+        <p><strong>Manifest Link:</strong></p>
         <p>
           <a href="${baseUrl}/${encodedConfig}/manifest.json" target="_blank">
             ${baseUrl}/${encodedConfig}/manifest.json
           </a>
         </p>
-        <p><strong>Exemple de lien pour un stream (film):</strong></p>
+        <p><strong>Example Stream Link (movie):</strong></p>
         <p>
           <a href="${baseUrl}/${encodedConfig}/stream/movie/tt1234567.json" target="_blank">
             ${baseUrl}/${encodedConfig}/stream/movie/tt1234567.json
@@ -164,6 +166,9 @@
     
     <label for="alldebrid">AllDebrid API Key</label>
     <input type="text" id="alldebrid" placeholder="Entrez votre AllDebrid API Key">
+
+    <label for="sharewood">Sharewood Passkey</label>
+    <input type="text" id="sharewood" placeholder="Enter your Sharewood Passkey">
     
     <button onclick="generateConfig()">Générer la configuration</button>
     <div id="result" class="result"></div>

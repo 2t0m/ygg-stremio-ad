@@ -32,7 +32,7 @@ function processTorrents(torrents, type, season, episode, config) {
           config.LANG_TO_SHOW.some(lang => torrent.title.toLowerCase().includes(lang.toLowerCase())) &&
           config.CODECS_TO_SHOW.some(codec => torrent.title.toLowerCase().includes(codec.toLowerCase()))
         )
-        .map(torrent => ({ ...torrent, category: "movieTorrents" }))
+        .map(torrent => ({ ...torrent, category: "movieTorrents", source: "YGG" }))
     );
     logger.debug(`🎬 ${movieTorrents.length} movie torrents found.`);
   }
@@ -47,7 +47,7 @@ function processTorrents(torrents, type, season, episode, config) {
           config.CODECS_TO_SHOW.some(codec => torrent.title.toLowerCase().includes(codec.toLowerCase())) &&
           torrent.title.toUpperCase().includes("COMPLETE")
         )
-        .map(torrent => ({ ...torrent, category: "completeSeriesTorrents" }))
+        .map(torrent => ({ ...torrent, category: "completeSeriesTorrents", source: "YGG" }))
     );
     logger.debug(`🎬 ${completeSeriesTorrents.length} complete series torrents found.`);
   }
@@ -65,7 +65,7 @@ function processTorrents(torrents, type, season, episode, config) {
           !torrent.title.toLowerCase().match(new RegExp(`s${seasonFormatted}e\\d{2}`, "i")) &&
           !torrent.title.toLowerCase().match(new RegExp(`s${seasonFormatted}\\.e\\d{2}`, "i"))
         )
-        .map(torrent => ({ ...torrent, category: "completeSeasonTorrents" }))
+        .map(torrent => ({ ...torrent, category: "completeSeasonTorrents", source: "YGG" }))
     );
     logger.debug(`🎬 ${completeSeasonTorrents.length} complete season torrents found.`);
   }
@@ -85,7 +85,11 @@ function processTorrents(torrents, type, season, episode, config) {
             torrent.title.toLowerCase().includes(`s${seasonFormatted}.e${episodeFormatted}`)
           )
         )
-        .map(torrent => ({ ...torrent, category: "episodeTorrents" }))
+        .map(torrent => ({
+          ...torrent,
+          category: "episodeTorrents",
+          source: "YGG"
+        }))
     );
     logger.debug(`🎬 ${episodeTorrents.length} episode torrents found.`);
   }
@@ -125,7 +129,7 @@ async function performSearch(searchTitle, type, config) {
     const response = await axios.get(requestUrl);
     let torrents = response.data || [];
 
-    torrents.sort((a, b) => (b.seeders || 0) - (a.seeders || 0));
+    // torrents.sort((a, b) => (b.seeders || 0) - (a.seeders || 0));
 
     torrents.sort((a, b) => {
       const priorityA = prioritizeTorrent(a, config);
