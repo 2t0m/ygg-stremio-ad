@@ -2,8 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 
 // Initialize the database
-const dbPath = path.join(__dirname, '../data/streams.db');
-const db = new sqlite3.Database(dbPath);
+const db = new sqlite3.Database(path.join('/data', 'streams.db'));
 
 // Create the table for TMDB cache if it doesn't exist
 db.serialize(() => {
