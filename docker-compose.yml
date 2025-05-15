@@ -1,7 +1,7 @@
 version: '3'
 services:
   ygg-stremio-ad:
-    image: 2t0m/ygg-stremio-ad:latest
+    image: ghcr.io/2t0m/ygg-stremio-ad:latest
     container_name: ygg-stremio-ad
     environment:
       - NODE_ENV=production
