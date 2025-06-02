@@ -30,8 +30,6 @@ async function searchSharewood(title, type, season = null, episode = null, confi
     const response = await axios.get(requestUrl);
     const torrents = response.data || [];
 
-    logger.info(`✅ Found ${torrents.length} torrents on Sharewood for "${title}".`);
-
     // Process torrents to structure the results
     return processTorrents(torrents, type, season, episode, config);
   } catch (error) {
@@ -47,10 +45,6 @@ async function searchSharewood(title, type, season = null, episode = null, confi
 
 // Process torrents based on type, season, and episode
 function processTorrents(torrents, type, season, episode, config) {
-      // Log the received torrents
-//   logger.debug(`🔍 Received ${torrents.length} torrents for processing.`);
-//   logger.debug(`📋 Torrents: ${JSON.stringify(torrents, null, 2)}`);
-
   const completeSeriesTorrents = [];
   const completeSeasonTorrents = [];
   const episodeTorrents = [];
