@@ -5,11 +5,14 @@ const { searchSharewood } = require('../services/sharewoodapi');
 const { uploadMagnets, getFilesFromMagnetId, unlockFileLink } = require('../services/alldebrid');
 const { parseFileName, formatSize, getConfig } = require('../utils/helpers');
 const logger = require('../utils/logger');
+const { getCachedStream, storeStream } = require('../utils/db');
 
 const router = express.Router();
 
 router.get('/:variables/stream/:type/:id.json', async (req, res) => {
   let config;
+  // Log the request details
+  logger.debug(`📡 Received stream request: ${req.method} ${req.originalUrl}`);
 
   // Log the start of a new stream request
   logger.info("--------------------");
@@ -28,8 +31,15 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
   // Parse the ID to extract IMDB ID, season, and episode
   const parts = id.split(':');
   const imdbId = parts[0];
-  const season = parts[1];
-  const episode = parts[2];
+  const season = parts[1] || null;
+  const episode = parts[2] || null;
+
+  // 👉 Check cache immediately after parsing IDs
+  const cachedStream = await getCachedStream(imdbId, season, episode);
+  if (cachedStream) {
+    logger.info(`✅ Stream found in cache for ${imdbId} S${season || ''}E${episode || ''}`);
+    return res.json({ streams: cachedStream });
+  }
 
   // Retrieve TMDB data based on IMDB ID
   logger.info(`🔍 Retrieving TMDB info for IMDB ID: ${imdbId}`);
@@ -57,6 +67,9 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
       config
     )
   ]);
+
+  logger.info(`✅ Found ${yggResults.movieTorrents.length + yggResults.completeSeriesTorrents.length + yggResults.completeSeasonTorrents.length + yggResults.episodeTorrents.length} torrents on YggTorrent for "${tmdbData.title}".`);
+  logger.info(`✅ Found ${sharewoodResults.movieTorrents.length + sharewoodResults.completeSeriesTorrents.length + sharewoodResults.completeSeasonTorrents.length + sharewoodResults.episodeTorrents.length} torrents on Sharewood for "${tmdbData.title}".`);
 
   // Combine results from both sources
   const combinedResults = {
@@ -168,42 +181,73 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
 
       const videoFiles = await getFilesFromMagnetId(torrent.id, torrent.source, config);
 
-      // Filter relevant video files
-      const filteredFiles = videoFiles.filter(file => {
+      // For each video file: unlock, cache, and push the correct stream in filteredFiles
+      const filteredFiles = [];
+      for (const file of videoFiles) {
         const fileName = file.name.toLowerCase();
+        const { resolution, codec, source } = parseFileName(file.name);
 
         if (type === "series") {
-          const seasonEpisodePattern = `s${season.padStart(2, '0')}e${episode.padStart(2, '0')}`;
-          const matchesEpisode = fileName.includes(seasonEpisodePattern);
-          logger.debug(`🔍 Checking episode pattern "${seasonEpisodePattern}" against file "${fileName}": ${matchesEpisode}`);
-          return matchesEpisode;
+          const episodeRegex = /s(\d{2})e(\d{2})/i;
+          const match = fileName.match(episodeRegex);
+          if (match) {
+            const detectedSeason = match[1];
+            const detectedEpisode = match[2];
+
+            // Check if already cached
+            const cached = await getCachedStream(imdbId, detectedSeason, detectedEpisode);
+            let streamObj;
+            if (cached && cached.length > 0) {
+              streamObj = cached[0];
+              logger.debug(`♻️ Stream loaded from cache for ${imdbId} S${detectedSeason}E${detectedEpisode}`);
+            } else {
+              const unlockedLink = await unlockFileLink(file.link, config);
+              if (!unlockedLink) continue;
+              streamObj = {
+                name: `❤️ ${torrent.source} + AD | 🖥️ ${resolution} | 🎞️ ${codec}`,
+                title: `${tmdbData.title}\n${file.name}\n🎬 ${source} | 💾 ${formatSize(file.size)}`,
+                url: unlockedLink
+              };
+              await storeStream(imdbId, detectedSeason, detectedEpisode, [streamObj]);
+              logger.debug(`💾 Stream cached for ${imdbId} S${detectedSeason}E${detectedEpisode}`);
+            }
+            // If it's the requested episode, push it to filteredFiles
+            if (
+              detectedSeason === season?.padStart(2, '0') &&
+              detectedEpisode === episode?.padStart(2, '0') &&
+              filteredFiles.length < config.FILES_TO_SHOW
+            ) {
+              filteredFiles.push(streamObj);
+              logger.info(`✅ Unlocked video: ${file.name}`);
+            }
+          }
         } else if (type === "movie") {
-          logger.info(`✅ File included (movie): ${file.name}`);
-          return true;
-        }
-
-        logger.info(`❌ File excluded: ${file.name}`);
-        return false;
-      });
-
-      // Unlock filtered files
-      for (const file of filteredFiles) {
-        if (streams.length >= config.FILES_TO_SHOW) {
-          logger.info(`🎯 Reached the maximum number of streams (${config.FILES_TO_SHOW}). Stopping.`);
-          break;
-        }
-
-        const unlockedLink = await unlockFileLink(file.link, config);
-        if (unlockedLink) {
-          const { resolution, codec, source } = parseFileName(file.name);
-          streams.push({
-            name: `❤️ ${torrent.source} + AD | 🖥️ ${resolution} | 🎞️ ${codec}`,
-            title: `${tmdbData.title}${season && episode ? ` - S${season.padStart(2, '0')}E${episode.padStart(2, '0')}` : ''}\n${file.name}\n🎬 ${source} | 💾 ${formatSize(file.size)}`,
-            url: unlockedLink
-          });
-          logger.info(`✅ Unlocked video: ${file.name}`);
+          // Same logic for movies
+          const cached = await getCachedStream(imdbId, null, null);
+          let streamObj;
+          if (cached && cached.length > 0) {
+            streamObj = cached[0];
+            logger.debug(`♻️ Stream loaded from cache for ${imdbId} (movie)`);
+          } else {
+            const unlockedLink = await unlockFileLink(file.link, config);
+            if (!unlockedLink) continue;
+            streamObj = {
+              name: `❤️ ${torrent.source} + AD | 🖥️ ${resolution} | 🎞️ ${codec}`,
+              title: `${tmdbData.title}\n${file.name}\n🎬 ${source} | 💾 ${formatSize(file.size)}`,
+              url: unlockedLink
+            };
+            await storeStream(imdbId, null, null, [streamObj]);
+            logger.debug(`💾 Stream cached for ${imdbId} (movie)`);
+          }
+          if (filteredFiles.length < config.FILES_TO_SHOW) {
+            filteredFiles.push(streamObj);
+            logger.info(`✅ Unlocked video: ${file.name}`);
+          }
         }
       }
+
+      // Add filtered streams to the global response
+      streams.push(...filteredFiles);
 
       // Log a warning if no files were unlocked
       if (filteredFiles.length === 0) {
@@ -213,6 +257,12 @@ router.get('/:variables/stream/:type/:id.json', async (req, res) => {
   };
 
   await unlockAndAddStreams(readyTorrents);
+
+  // Store streams in cache if any were found
+  if (streams.length > 0) {
+    await storeStream(imdbId, season, episode, streams);
+    logger.info(`💾 Streams cached for ${imdbId} S${season || ''}E${episode || ''}`);
+  }
 
   logger.info(`🎉 ${streams.length} stream(s) obtained`);
   res.json({ streams });

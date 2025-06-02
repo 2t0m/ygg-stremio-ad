@@ -1,12 +1,11 @@
-version: '3'
 services:
   ygg-stremio-ad:
     image: ghcr.io/2t0m/ygg-stremio-ad:latest
     container_name: ygg-stremio-ad
     environment:
-      - NODE_ENV=production
+      LOG_LEVEL: ERROR
     volumes:
-      - CHANGE_TO_COMPOSE_DATA_PATH/ygg-stremio-ad/data:/data
+      - CHANGE_TO_DATA_PATH/ygg-stremio-ad/data:/data
     ports:
-      - "5000:5000"
+      - 5000:5000
     restart: unless-stopped

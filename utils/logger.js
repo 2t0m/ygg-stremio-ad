@@ -1,7 +1,10 @@
 const winston = require('winston');
 
+let logLevel = process.env.LOG_LEVEL || 'debug';
+logLevel = logLevel.toLowerCase();
+
 const logger = winston.createLogger({
-  level: process.env.NODE_ENV === 'production' ? 'warn' : 'debug',
+  level: logLevel,
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.printf(({ timestamp, level, message }) => {
